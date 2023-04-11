@@ -71,8 +71,7 @@ func NewMainWindow(fyneApp fyne.App, appName, appVersion string, app *backend.Ap
 	m.Controller.ReloadFunc = m.BrowsingPane.Reload
 	m.Controller.CurPageFunc = m.BrowsingPane.CurPage
 
-	m.BottomPanel = NewBottomPanel(app.Player, m.Router.NavigateTo)
-	m.BottomPanel.SetPlaybackManager(app.PlaybackManager)
+	m.BottomPanel = NewBottomPanel(app.PlaybackManager, m.Router.NavigateTo)
 	m.BottomPanel.ImageManager = app.ImageManager
 	m.container = container.NewBorder(nil, m.BottomPanel, nil, nil, m.BrowsingPane)
 	m.Window.SetContent(m.container)
@@ -133,13 +132,13 @@ func (m *MainWindow) SetupSystemTrayMenu(appName string, fyneApp fyne.App) {
 	if desk, ok := fyneApp.(desktop.App); ok {
 		menu := fyne.NewMenu(appName,
 			fyne.NewMenuItem("Play/Pause", func() {
-				_ = m.App.Player.PlayPause()
+				m.App.PlaybackManager.PlayPause()
 			}),
 			fyne.NewMenuItem("Previous", func() {
-				_ = m.App.Player.SeekBackOrPrevious()
+				m.App.PlaybackManager.SeekBackOrPrevious()
 			}),
 			fyne.NewMenuItem("Next", func() {
-				_ = m.App.Player.SeekNext()
+				m.App.PlaybackManager.SeekNext()
 			}),
 			fyne.NewMenuItemSeparator(),
 			fyne.NewMenuItem("Show", m.Window.Show),
@@ -239,7 +238,7 @@ func (m *MainWindow) addShortcuts() {
 		case fyne.KeyEscape:
 			m.Controller.CloseEscapablePopUp()
 		case fyne.KeySpace:
-			m.App.Player.PlayPause()
+			m.App.PlaybackManager.PlayPause()
 		}
 	})
 }

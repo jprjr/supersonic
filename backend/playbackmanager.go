@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strconv"
 	"supersonic/backend/util"
@@ -41,6 +42,8 @@ type PlaybackManager struct {
 
 	onSongChange     []func(nowPlaying *subsonic.Child, justScrobbledIfAny *subsonic.Child)
 	onPlayTimeUpdate []func(float64, float64)
+	onPaused         []func()
+	onPlaying        []func()
 }
 
 func NewPlaybackManager(
@@ -81,15 +84,26 @@ func NewPlaybackManager(
 		pm.playTimeStopwatch.Reset()
 		pm.stopPollTimePos()
 		pm.doUpdateTimePos()
-		pm.invokeOnSongChangeCallbacks()
+		if !pm.callbacksDisabled {
+			for _, cb := range pm.onPaused {
+				cb()
+			}
+			pm.invokeOnSongChangeCallbacks()
+		}
 	})
 	p.OnPaused(func() {
 		pm.playTimeStopwatch.Stop()
 		pm.stopPollTimePos()
+		for _, cb := range pm.onPaused {
+			cb()
+		}
 	})
 	p.OnPlaying(func() {
 		pm.playTimeStopwatch.Start()
 		pm.startPollTimePos()
+		for _, cb := range pm.onPlaying {
+			cb()
+		}
 	})
 
 	s.OnLogout(func() {
@@ -97,6 +111,19 @@ func NewPlaybackManager(
 	})
 
 	return pm
+}
+
+func (p *PlaybackManager) SetVolume(vol int) {
+	p.player.SetVolume(vol)
+}
+
+func (p *PlaybackManager) GetVolume() int {
+	return p.player.GetVolume()
+}
+
+// Seeks within a track by fraction [0 .. 1]
+func (p *PlaybackManager) SeekFraction(f float64) {
+	p.player.Seek(fmt.Sprintf("%d", int(f*100)), player.SeekAbsolutePercent)
 }
 
 func (p *PlaybackManager) IsSeeking() bool {
@@ -120,6 +147,16 @@ func (p *PlaybackManager) NowPlaying() *subsonic.Child {
 // Sets a callback that is notified whenever a new song begins playing.
 func (p *PlaybackManager) OnSongChange(cb func(nowPlaying *subsonic.Child, justScrobbledIfAny *subsonic.Child)) {
 	p.onSongChange = append(p.onSongChange, cb)
+}
+
+// Registers a callback that is notified whenever playback is paused or stopped.
+func (p *PlaybackManager) OnPausedOrStopped(cb func()) {
+	p.onPaused = append(p.onPaused, cb)
+}
+
+// Registers a callback that is notified whenever playback begins from the paused or stopped state.
+func (p *PlaybackManager) OnPlaying(cb func()) {
+	p.onPlaying = append(p.onPlaying, cb)
 }
 
 // Registers a callback that is notified whenever the play time should be updated.
@@ -286,6 +323,18 @@ func (p *PlaybackManager) StopAndClearPlayQueue() {
 	p.player.ClearPlayQueue()
 	p.doUpdateTimePos()
 	p.playQueue = nil
+}
+
+func (p *PlaybackManager) PlayPause() {
+	p.player.PlayPause()
+}
+
+func (p *PlaybackManager) SeekBackOrPrevious() {
+	p.player.SeekBackOrPrevious()
+}
+
+func (p *PlaybackManager) SeekNext() {
+	p.player.SeekNext()
 }
 
 func (p *PlaybackManager) SetReplayGainOptions(config ReplayGainConfig) {

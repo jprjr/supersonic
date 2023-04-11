@@ -1,10 +1,8 @@
 package ui
 
 import (
-	"fmt"
 	"image"
 	"supersonic/backend"
-	"supersonic/player"
 	"supersonic/ui/controller"
 	"supersonic/ui/layouts"
 	"supersonic/ui/widgets"
@@ -19,8 +17,7 @@ import (
 type BottomPanel struct {
 	widget.BaseWidget
 
-	ImageManager    *backend.ImageManager
-	playbackManager *backend.PlaybackManager
+	ImageManager *backend.ImageManager
 
 	NowPlaying  *widgets.NowPlayingCard
 	Controls    *widgets.PlayerControls
@@ -30,58 +27,51 @@ type BottomPanel struct {
 
 var _ fyne.Widget = (*BottomPanel)(nil)
 
-func NewBottomPanel(p *player.Player, nav func(controller.Route)) *BottomPanel {
+func NewBottomPanel(pm *backend.PlaybackManager, nav func(controller.Route)) *BottomPanel {
 	bp := &BottomPanel{}
 	bp.ExtendBaseWidget(bp)
-	p.OnPaused(func() {
+	pm.OnPausedOrStopped(func() {
 		bp.Controls.SetPlaying(false)
 	})
-	p.OnPlaying(func() {
+	pm.OnPlaying(func() {
 		bp.Controls.SetPlaying(true)
 	})
-	p.OnStopped(func() {
-		bp.Controls.SetPlaying(false)
-	})
-
-	bp.NowPlaying = widgets.NewNowPlayingCard()
-	bp.NowPlaying.OnAlbumNameTapped(func() {
-		nav(controller.AlbumRoute(bp.playbackManager.NowPlaying().AlbumID))
-	})
-	bp.NowPlaying.OnArtistNameTapped(func() {
-		nav(controller.ArtistRoute(bp.playbackManager.NowPlaying().ArtistID))
-	})
-	bp.Controls = widgets.NewPlayerControls()
-	bp.Controls.OnPlayPause(func() {
-		p.PlayPause()
-	})
-	bp.Controls.OnSeekNext(func() {
-		p.SeekNext()
-	})
-	bp.Controls.OnSeekPrevious(func() {
-		p.SeekBackOrPrevious()
-	})
-	bp.Controls.OnSeek(func(f float64) {
-		p.Seek(fmt.Sprintf("%d", int(f*100)), player.SeekAbsolutePercent)
-	})
-
-	bp.AuxControls = widgets.NewAuxControls(p.GetVolume())
-	bp.AuxControls.VolumeControl.OnVolumeChanged = func(v int) {
-		_ = p.SetVolume(v)
-	}
-
-	bp.container = container.New(layouts.NewLeftMiddleRightLayout(500),
-		bp.NowPlaying, bp.Controls, bp.AuxControls)
-	return bp
-}
-
-func (bp *BottomPanel) SetPlaybackManager(pm *backend.PlaybackManager) {
-	bp.playbackManager = pm
 	pm.OnSongChange(bp.onSongChange)
 	pm.OnPlayTimeUpdate(func(cur, total float64) {
 		if !pm.IsSeeking() {
 			bp.Controls.UpdatePlayTime(cur, total)
 		}
 	})
+
+	bp.NowPlaying = widgets.NewNowPlayingCard()
+	bp.NowPlaying.OnAlbumNameTapped(func() {
+		nav(controller.AlbumRoute(pm.NowPlaying().AlbumID))
+	})
+	bp.NowPlaying.OnArtistNameTapped(func() {
+		nav(controller.ArtistRoute(pm.NowPlaying().ArtistID))
+	})
+	bp.Controls = widgets.NewPlayerControls()
+	bp.Controls.OnPlayPause(func() {
+		pm.PlayPause()
+	})
+	bp.Controls.OnSeekNext(func() {
+		pm.SeekNext()
+	})
+	bp.Controls.OnSeekPrevious(func() {
+		pm.SeekBackOrPrevious()
+	})
+	bp.Controls.OnSeek(func(f float64) {
+		pm.SeekFraction(f)
+	})
+
+	bp.AuxControls = widgets.NewAuxControls(pm.GetVolume())
+	bp.AuxControls.VolumeControl.OnVolumeChanged = func(v int) {
+		pm.SetVolume(v)
+	}
+
+	bp.container = container.New(layouts.NewLeftMiddleRightLayout(500),
+		bp.NowPlaying, bp.Controls, bp.AuxControls)
+	return bp
 }
 
 func (bp *BottomPanel) onSongChange(song *subsonic.Child, _ *subsonic.Child) {
